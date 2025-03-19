@@ -9,10 +9,10 @@
     canvas { display: block; }
     #gameOverScreen { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; text-align: center; padding-top: 200px; font-size: 32px; }
     button { padding: 10px 20px; font-size: 20px; margin-top: 20px; cursor: pointer; }
-    #startScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 32px; }
-    #healthBarContainer { position: absolute; top: 20px; left: 20px; width: 200px; height: 20px; border: 2px solid #fff; display: none; }
+    #startScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 32px; z-index: 10; }
+    #healthBarContainer { position: absolute; top: 20px; left: 20px; width: 200px; height: 20px; border: 2px solid #fff; display: none; z-index: 5; }
     #healthBar { height: 100%; width: 100%; background-color: limegreen; }
-    .enemyHealthBarContainer { position: absolute; height: 5px; width: 40px; background: #333; border: 1px solid #fff; }
+    .enemyHealthBarContainer { position: absolute; height: 5px; width: 40px; background: #333; border: 1px solid #fff; z-index: 5; }
     .enemyHealthBar { height: 100%; background: red; }
   </style>
 </head>
@@ -50,7 +50,7 @@ function createEnemyHealthBar(enemy) {
 }
 
 function updateEnemyHealthBars() {
-  enemyHealthBars.forEach(({ container, bar, enemy, index }) => {
+  enemyHealthBars.forEach(({ container, bar, enemy }, index) => {
     if (enemyHealth[index] <= 0) {
       container.style.display = 'none';
     } else {
@@ -70,8 +70,7 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  controls = new PointerLockControls(camera, document.body);
-  document.body.addEventListener('click', () => controls.lock());
+  controls = new PointerLockControls(camera, renderer.domElement);
 
   const floorGeometry = new THREE.PlaneGeometry(100, 100);
   const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 });
@@ -92,6 +91,10 @@ function init() {
 
   camera.position.y = 1.6;
   clock = new THREE.Clock();
+
+  renderer.domElement.addEventListener('click', () => {
+    if (controls.isLocked) shootBullet();
+  });
 
   animate();
 }
@@ -122,6 +125,7 @@ function enemyAI(delta) {
       healthBar.style.width = `${playerHealth}%`;
       if (playerHealth <= 0) {
         document.getElementById('gameOverScreen').style.display = 'block';
+        controls.unlock();
       }
     }
   }
@@ -155,13 +159,10 @@ function animate() {
 function startGame() {
   document.getElementById('startScreen').style.display = 'none';
   healthBarContainer.style.display = 'block';
-  init();
-}
 
-window.addEventListener('click', (e) => {
-  if (!controls || !controls.isLocked) return;
-  shootBullet();
-});
+  init();
+  controls.lock();
+}
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -171,4 +172,5 @@ window.addEventListener('resize', () => {
 </script>
 </body>
 </html>
+
 
