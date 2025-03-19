@@ -9,13 +9,18 @@
     canvas { display: block; }
     #gameOverScreen { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; text-align: center; padding-top: 200px; font-size: 32px; }
     button { padding: 10px 20px; font-size: 20px; margin-top: 20px; cursor: pointer; }
-    #healthBarContainer { position: absolute; top: 20px; left: 20px; width: 200px; height: 20px; border: 2px solid #fff; }
+    #startScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 32px; }
+    #healthBarContainer { position: absolute; top: 20px; left: 20px; width: 200px; height: 20px; border: 2px solid #fff; display: none; }
     #healthBar { height: 100%; width: 100%; background-color: limegreen; }
     .enemyHealthBarContainer { position: absolute; height: 5px; width: 40px; background: #333; border: 1px solid #fff; }
     .enemyHealthBar { height: 100%; background: red; }
   </style>
 </head>
 <body>
+<div id="startScreen">
+  <div>Web FPS Game</div>
+  <button onclick="startGame()">Play Now</button>
+</div>
 <div id="healthBarContainer"><div id="healthBar"></div></div>
 <div id="gameOverScreen">
   <div>Game Over</div>
@@ -30,6 +35,7 @@ let scene, camera, renderer, controls;
 let bullets = [], enemies = [], enemyHealth = [], enemyHealthBars = [], clock;
 let playerHealth = 100;
 const enemyCount = 5;
+const healthBarContainer = document.getElementById('healthBarContainer');
 const healthBar = document.getElementById('healthBar');
 const shootSound = document.getElementById('shootSound');
 
@@ -146,15 +152,23 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-window.addEventListener('click', () => shootBullet());
+function startGame() {
+  document.getElementById('startScreen').style.display = 'none';
+  healthBarContainer.style.display = 'block';
+  init();
+}
+
+window.addEventListener('click', (e) => {
+  if (!controls || !controls.isLocked) return;
+  shootBullet();
+});
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
-init();
 </script>
 </body>
 </html>
+
