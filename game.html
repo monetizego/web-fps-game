@@ -3,137 +3,158 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Web FPS Game - Play</title>
+  <title>Web FPS Game</title>
   <style>
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; overflow: hidden; background-color: #000; }
     canvas { display: block; }
-    #gameOver {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      font-size: 32px; background: rgba(0,0,0,0.7); color: white; padding: 20px;
-      display: none; text-align: center;
-    }
+    #gameOverScreen { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; text-align: center; padding-top: 200px; font-size: 32px; }
+    button { padding: 10px 20px; font-size: 20px; margin-top: 20px; cursor: pointer; }
+    #healthBarContainer { position: absolute; top: 20px; left: 20px; width: 200px; height: 20px; border: 2px solid #fff; }
+    #healthBar { height: 100%; width: 100%; background-color: limegreen; }
+    .enemyHealthBarContainer { position: absolute; height: 5px; width: 40px; background: #333; border: 1px solid #fff; }
+    .enemyHealthBar { height: 100%; background: red; }
   </style>
 </head>
 <body>
-  <div id="gameOver">
-    <p>Game Over!</p>
-    <button onclick="location.reload()">Restart</button>
-  </div>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/controls/PointerLockControls.js"></script>
-  <script>
-    let scene, camera, renderer, controls, playerHealth = 100;
-    let bullets = [], enemies = [], enemyBullets = [];
+<div id="healthBarContainer"><div id="healthBar"></div></div>
+<div id="gameOverScreen">
+  <div>Game Over</div>
+  <button onclick="location.reload()">Restart</button>
+</div>
+<audio id="shootSound" src="https://cdn.pixabay.com/audio/2022/03/15/audio_099d382e00.mp3"></audio>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/PointerLockControls.js';
 
-    init();
-    animate();
+let scene, camera, renderer, controls;
+let bullets = [], enemies = [], enemyHealth = [], enemyHealthBars = [], clock;
+let playerHealth = 100;
+const enemyCount = 5;
+const healthBar = document.getElementById('healthBar');
+const shootSound = document.getElementById('shootSound');
 
-    function init() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      renderer = new THREE.WebGLRenderer();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      document.body.appendChild(renderer.domElement);
+function createEnemyHealthBar(enemy) {
+  const barContainer = document.createElement('div');
+  barContainer.className = 'enemyHealthBarContainer';
+  const bar = document.createElement('div');
+  bar.className = 'enemyHealthBar';
+  barContainer.appendChild(bar);
+  document.body.appendChild(barContainer);
+  return { container: barContainer, bar: bar, enemy: enemy };
+}
 
-      controls = new THREE.PointerLockControls(camera, document.body);
-      document.body.addEventListener('click', () => controls.lock());
-
-      scene.add(controls.getObject());
-
-      let floorGeo = new THREE.PlaneGeometry(500, 500);
-      let floorMat = new THREE.MeshBasicMaterial({ color: 0x555555, side: THREE.DoubleSide });
-      let floor = new THREE.Mesh(floorGeo, floorMat);
-      floor.rotation.x = Math.PI / 2;
-      scene.add(floor);
-
-      spawnEnemies();
-
-      document.addEventListener('keydown', onKeyDown);
+function updateEnemyHealthBars() {
+  enemyHealthBars.forEach(({ container, bar, enemy, index }) => {
+    if (enemyHealth[index] <= 0) {
+      container.style.display = 'none';
+    } else {
+      const pos = enemy.position.clone().project(camera);
+      const x = (pos.x * 0.5 + 0.5) * window.innerWidth - 20;
+      const y = (-pos.y * 0.5 + 0.5) * window.innerHeight - 40;
+      container.style.transform = `translate(${x}px, ${y}px)`;
+      bar.style.width = `${enemyHealth[index]}%`;
     }
+  });
+}
 
-    function spawnEnemies() {
-      for (let i = 0; i < 5; i++) {
-        let enemyGeo = new THREE.BoxGeometry(2, 2, 2);
-        let enemyMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        let enemy = new THREE.Mesh(enemyGeo, enemyMat);
-        enemy.position.set(Math.random() * 100 - 50, 1, Math.random() * 100 - 50);
-        enemy.health = 50;
-        scene.add(enemy);
-        enemies.push(enemy);
+function init() {
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+  renderer = new THREE.WebGLRenderer();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  controls = new PointerLockControls(camera, document.body);
+  document.body.addEventListener('click', () => controls.lock());
+
+  const floorGeometry = new THREE.PlaneGeometry(100, 100);
+  const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 });
+  const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+  floor.rotation.x = -Math.PI / 2;
+  scene.add(floor);
+
+  for (let i = 0; i < enemyCount; i++) {
+    const enemyGeo = new THREE.BoxGeometry(1, 1, 1);
+    const enemyMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const enemy = new THREE.Mesh(enemyGeo, enemyMat);
+    enemy.position.set(Math.random() * 50 - 25, 0.5, Math.random() * 50 - 25);
+    scene.add(enemy);
+    enemies.push(enemy);
+    enemyHealth.push(100);
+    enemyHealthBars.push(createEnemyHealthBar(enemy));
+  }
+
+  camera.position.y = 1.6;
+  clock = new THREE.Clock();
+
+  animate();
+}
+
+function shootBullet() {
+  shootSound.currentTime = 0;
+  shootSound.play();
+  const bulletGeo = new THREE.SphereGeometry(0.1);
+  const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+  const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+  bullet.position.copy(camera.position);
+  bullet.direction = new THREE.Vector3();
+  camera.getWorldDirection(bullet.direction);
+  bullets.push(bullet);
+  scene.add(bullet);
+}
+
+function enemyAI(delta) {
+  for (let i = 0; i < enemies.length; i++) {
+    const enemy = enemies[i];
+    if (enemyHealth[i] <= 0) continue;
+    const direction = new THREE.Vector3();
+    direction.subVectors(camera.position, enemy.position).normalize();
+    enemy.position.addScaledVector(direction, delta * 2);
+
+    if (enemy.position.distanceTo(camera.position) < 5) {
+      playerHealth -= delta * 10;
+      healthBar.style.width = `${playerHealth}%`;
+      if (playerHealth <= 0) {
+        document.getElementById('gameOverScreen').style.display = 'block';
       }
     }
+  }
+}
 
-    function onKeyDown(e) {
-      if (e.code === 'Space') shoot();
-    }
+function animate() {
+  requestAnimationFrame(animate);
 
-    function shoot() {
-      let bulletGeo = new THREE.SphereGeometry(0.1, 8, 8);
-      let bulletMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-      let bullet = new THREE.Mesh(bulletGeo, bulletMat);
-      bullet.position.copy(camera.position);
-      bullet.velocity = new THREE.Vector3();
-      camera.getWorldDirection(bullet.velocity);
-      bullet.velocity.multiplyScalar(2);
-      bullets.push(bullet);
-      scene.add(bullet);
-    }
+  const delta = clock.getDelta();
 
-    function animate() {
-      requestAnimationFrame(animate);
-
-      bullets.forEach((b, i) => {
-        b.position.add(b.velocity);
-        enemies.forEach((enemy, ei) => {
-          if (b.position.distanceTo(enemy.position) < 1) {
-            enemy.health -= 20;
-            if (enemy.health <= 0) {
-              scene.remove(enemy);
-              enemies.splice(ei, 1);
-            }
-            scene.remove(b);
-            bullets.splice(i, 1);
-          }
-        });
-      });
-
-      enemies.forEach(enemy => {
-        let dir = new THREE.Vector3();
-        dir.subVectors(controls.getObject().position, enemy.position).normalize().multiplyScalar(0.03);
-        enemy.position.add(dir);
-
-        if (Math.random() < 0.01) shootEnemyBullet(enemy);
-      });
-
-      enemyBullets.forEach((b, i) => {
-        b.position.add(b.velocity);
-        if (b.position.distanceTo(controls.getObject().position) < 1) {
-          playerHealth -= 10;
-          scene.remove(b);
-          enemyBullets.splice(i, 1);
-          if (playerHealth <= 0) document.getElementById('gameOver').style.display = 'block';
+  bullets.forEach((bullet, index) => {
+    bullet.position.addScaledVector(bullet.direction, delta * 50);
+    enemies.forEach((enemy, i) => {
+      if (enemyHealth[i] > 0 && bullet.position.distanceTo(enemy.position) < 0.5) {
+        enemyHealth[i] -= 50;
+        if (enemyHealth[i] <= 0) {
+          scene.remove(enemy);
         }
-      });
-
-      renderer.render(scene, camera);
-    }
-
-    function shootEnemyBullet(enemy) {
-      let bulletGeo = new THREE.SphereGeometry(0.1, 8, 8);
-      let bulletMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-      let bullet = new THREE.Mesh(bulletGeo, bulletMat);
-      bullet.position.copy(enemy.position);
-      bullet.velocity = new THREE.Vector3();
-      bullet.velocity.subVectors(controls.getObject().position, enemy.position).normalize().multiplyScalar(0.1);
-      enemyBullets.push(bullet);
-      scene.add(bullet);
-    }
-
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+        scene.remove(bullet);
+        bullets.splice(index, 1);
+      }
     });
-  </script>
+  });
+
+  enemyAI(delta);
+  updateEnemyHealthBars();
+
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('click', () => shootBullet());
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+init();
+</script>
 </body>
 </html>
